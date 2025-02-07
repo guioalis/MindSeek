@@ -10,15 +10,23 @@ export const chatAPI = {
         },
         body: JSON.stringify({
           model: 'deepseek-r1:32b-qwen-distill-q4_K_M',
-          messages
+          messages: messages.map(({ role, content }) => ({ role, content }))
         })
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Network response was not ok');
       }
 
-      return await response.json();
+      const data = await response.json();
+      
+      // 验证响应数据
+      if (!data || (!data.choices && !data.message)) {
+        throw new Error('Invalid response format from API');
+      }
+
+      return data;
     } catch (error) {
       console.error('API Error:', error);
       throw error;
