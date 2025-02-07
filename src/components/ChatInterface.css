@@ -108,4 +108,19 @@ button:hover {
   margin-bottom: 8px;
   max-width: 80%;
   align-self: flex-end;
+}
+
+.metrics {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--border-radius);
+  margin: 8px 0;
+  font-size: 0.9em;
+  color: var(--text-color);
+}
+
+.metrics span {
+  opacity: 0.8;
 } 

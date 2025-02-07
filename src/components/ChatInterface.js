@@ -10,6 +10,7 @@ function ChatInterface() {
   const { state, dispatch } = useChat();
   const [input, setInput] = useState('');
   const currentMessageRef = useRef(null);
+  const [metrics, setMetrics] = useState(null);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -24,9 +25,9 @@ function ChatInterface() {
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
     setInput('');
     dispatch({ type: 'SET_LOADING', payload: true });
+    setMetrics(null);
 
     try {
-      // 创建一个初始的 AI 响应消息
       const aiMessage = {
         role: 'assistant',
         content: '',
@@ -35,27 +36,24 @@ function ChatInterface() {
       dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });
       currentMessageRef.current = aiMessage;
 
-      // 处理流式响应
-      await chatAPI.sendMessage([...state.messages, userMessage], (chunk) => {
-        // 更新当前消息的内容
+      const result = await chatAPI.sendMessage([...state.messages, userMessage], (chunk) => {
         currentMessageRef.current = {
           ...currentMessageRef.current,
           content: currentMessageRef.current.content + chunk
         };
         
-        // 更新消息列表中的最后一条消息
         dispatch({ 
           type: 'UPDATE_LAST_MESSAGE', 
           payload: currentMessageRef.current 
         });
       });
 
+      if (result.metrics) {
+        setMetrics(result.metrics);
+      }
+
     } catch (error) {
       console.error('Chat Error:', error);
-      dispatch({ 
-        type: 'SET_ERROR', 
-        payload: '无法获取 AI 响应，请重试。' 
-      });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
       currentMessageRef.current = null;
@@ -66,9 +64,10 @@ function ChatInterface() {
     <div className="chat-interface">
       <MessageList messages={state.messages} />
       {state.loading && <Loading />}
-      {state.error && (
-        <div className="error-message">
-          {state.error}
+      {metrics && (
+        <div className="metrics">
+          <span>耗时: {metrics.duration}</span>
+          <span>评估次数: {metrics.evalCount}</span>
         </div>
       )}
       <form onSubmit={sendMessage} className="input-form">

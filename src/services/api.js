@@ -1,12 +1,14 @@
-const API_BASE_URL = 'http://137.184.222.20:8888';
+import config from '../config';
 
 export const chatAPI = {
   sendMessage: async (messages, onChunk) => {
     try {
-      // 只发送最后一条消息
       const lastMessage = messages[messages.length - 1];
       
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.TIMEOUT);
+
+      const response = await fetch(`${config.API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -14,55 +16,72 @@ export const chatAPI = {
           'Connection': 'keep-alive'
         },
         body: JSON.stringify({
-          model: 'deepseek-r1:32b-qwen-distill-q4_K_M',
+          model: config.MODEL,
           messages: [{
             role: lastMessage.role,
             content: lastMessage.content
           }],
           stream: true
-        })
+        }),
+        signal: controller.signal,
+        keepalive: true,
+        timeout: config.CONNECT_TIMEOUT
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
+      clearTimeout(timeoutId);
+
+      if (!response.ok || !response.body) {
+        return;
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedContent = '';
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
+          for (const line of lines) {
+            if (!line.trim()) continue;
 
-          try {
-            const data = JSON.parse(line);
-            if (data.message?.content) {
-              accumulatedContent += data.message.content;
-              onChunk(data.message.content);
+            try {
+              const data = JSON.parse(line);
+              
+              if (data.message?.content) {
+                accumulatedContent += data.message.content;
+                onChunk(data.message.content);
+              }
+              
+              if (data.done) {
+                const totalDuration = data.total_duration ? 
+                  `${Math.round(data.total_duration/1000000)}ms` : 'N/A';
+                const evalCount = data.eval_count || 'N/A';
+                
+                return { 
+                  text: accumulatedContent,
+                  metrics: {
+                    duration: totalDuration,
+                    evalCount: evalCount
+                  }
+                };
+              }
+            } catch (e) {
+              console.warn('Failed to parse chunk:', e);
             }
-            
-            if (data.done) {
-              console.log(`总耗时: ${data.total_duration / 1000000}ms`);
-              console.log(`评估次数: ${data.eval_count}`);
-              return { text: accumulatedContent };
-            }
-          } catch (e) {
-            console.warn('Failed to parse chunk:', e);
           }
         }
+      } catch (error) {
+        reader.cancel();
       }
 
       return { text: accumulatedContent };
     } catch (error) {
       console.error('API Error:', error);
-      throw error;
     }
   }
 }; 
