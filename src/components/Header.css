@@ -1,0 +1,17 @@
+.header {
+  padding: 20px;
+  margin-bottom: 30px;
+}
+
+.header h1 {
+  font-size: 2.5em;
+  margin: 0;
+  color: #ffffff;
+}
+
+.header h2 {
+  font-size: 1.2em;
+  margin: 10px 0;
+  color: #e0e0e0;
+  font-weight: 300;
+} 
