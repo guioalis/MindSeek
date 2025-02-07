@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './ChatInterface.css';
 import { useChat } from '../context/ChatContext';
 import { chatAPI } from '../services/api';
@@ -9,6 +9,7 @@ import Loading from './Common/Loading';
 function ChatInterface() {
   const { state, dispatch } = useChat();
   const [input, setInput] = useState('');
+  const currentMessageRef = useRef(null);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -20,41 +21,44 @@ function ChatInterface() {
       timestamp: Date.now()
     };
 
-    // 添加用户消息到状态
     dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
     setInput('');
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
-      const response = await chatAPI.sendMessage([...state.messages, userMessage]);
-      
-      // 检查响应格式并添加AI回复
-      if (response && response.choices && response.choices[0]) {
-        const aiMessage = {
-          role: 'assistant',
-          content: response.choices[0].message.content,
-          timestamp: Date.now()
+      // 创建一个初始的 AI 响应消息
+      const aiMessage = {
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now()
+      };
+      dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });
+      currentMessageRef.current = aiMessage;
+
+      // 处理流式响应
+      await chatAPI.sendMessage([...state.messages, userMessage], (chunk) => {
+        // 更新当前消息的内容
+        currentMessageRef.current = {
+          ...currentMessageRef.current,
+          content: currentMessageRef.current.content + chunk
         };
-        dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });
-      } else if (response && response.message) {
-        // 处理不同的API响应格式
-        const aiMessage = {
-          role: 'assistant',
-          content: response.message.content,
-          timestamp: Date.now()
-        };
-        dispatch({ type: 'ADD_MESSAGE', payload: aiMessage });
-      } else {
-        throw new Error('Invalid API response format');
-      }
+        
+        // 更新消息列表中的最后一条消息
+        dispatch({ 
+          type: 'UPDATE_LAST_MESSAGE', 
+          payload: currentMessageRef.current 
+        });
+      });
+
     } catch (error) {
       console.error('Chat Error:', error);
       dispatch({ 
         type: 'SET_ERROR', 
-        payload: 'Failed to get response from AI. Please try again.' 
+        payload: '无法获取 AI 响应，请重试。' 
       });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
+      currentMessageRef.current = null;
     }
   };
 
@@ -72,14 +76,14 @@ function ChatInterface() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message here..."
+          placeholder="输入您的消息..."
           disabled={state.loading}
         />
         <Button 
           type="submit" 
           disabled={state.loading || !input.trim()}
         >
-          Send
+          发送
         </Button>
       </form>
     </div>

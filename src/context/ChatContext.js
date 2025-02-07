@@ -15,6 +15,14 @@ function chatReducer(state, action) {
         ...state,
         messages: [...state.messages, action.payload]
       };
+    case 'UPDATE_LAST_MESSAGE':
+      return {
+        ...state,
+        messages: [
+          ...state.messages.slice(0, -1),
+          action.payload
+        ]
+      };
     case 'SET_LOADING':
       return {
         ...state,
